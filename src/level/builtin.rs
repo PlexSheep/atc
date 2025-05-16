@@ -8,7 +8,8 @@ pub const Y: usize = 20;
 impl Level {
     pub fn builtin() -> Self {
         let mut world = World::new(X, Y);
-        // world.place_route_in_line([0, 0], [19, 19]);
+        world.place_route_in_line([0, 0], [20, 20]);
+        world.place_route_in_line([2, 6], [10, 8]);
 
         Level {
             world,

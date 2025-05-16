@@ -11,8 +11,10 @@ mod level;
 mod world;
 
 use level::Level;
+use tracing::trace;
 
 fn main() -> color_eyre::Result<()> {
+    setup_logging();
     color_eyre::install()?;
     let terminal = ratatui::init();
     let result = App::new().run(terminal);
@@ -106,4 +108,27 @@ impl Default for App {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn setup_logging() {
+    let logfile = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("/tmp/atc.log")
+        .unwrap();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(
+            #[cfg(debug_assertions)]
+            tracing::Level::TRACE,
+            #[cfg(not(debug_assertions))]
+            tracing::Level::INFO,
+        )
+        .without_time()
+        .with_file(false)
+        .with_writer(logfile)
+        .with_target(false)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("could not setup logger");
+    trace!("Setup logging");
 }

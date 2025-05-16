@@ -1,5 +1,7 @@
 use std::{fmt::Display, usize};
 
+use tracing::{debug, info, trace};
+
 #[derive(Copy, Clone, Debug)]
 pub struct Pos {
     pub x: usize,
@@ -78,14 +80,16 @@ impl World {
         let dy = b.y - a.y;
         let mut d = 2 * dy - dx;
         let mut y = a.y;
+        trace!("place_route_in_line: d={d} y={y} dx={dx} dy={dy}");
 
         for x in a.x..b.x {
             self.place_tile(WorldTile::Route, [x, y]);
             if d > 0 {
                 y += 1;
-                d -= 2 * dx;
+            } else {
+                d += 2 * dy;
             }
-            d += 2 * dy;
+            trace!("place_route_in_line: d={d} y={y} dx={dx} dy={dy}");
         }
         self
     }
