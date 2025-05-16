@@ -1,4 +1,4 @@
-use crate::world::World;
+use crate::world::{DirectionGrid, World};
 
 use super::Level;
 
@@ -8,10 +8,24 @@ pub const Y: usize = 20;
 impl Level {
     pub fn builtin() -> Self {
         let mut world = World::new(X, Y);
-        world.place_route_in_line([0, 0], [20, 10]).unwrap();
-        world.place_route_in_line([2, 6], [14, 8]).unwrap();
-        world.place_route_in_line([20, 20], [0, 0]).unwrap();
-        world.place_tile(crate::world::WorldTile::Beacon(0), [10, 10]);
+
+        fn place_stuff(world: &mut World) -> Result<(), String> {
+            world.place_route_in_line([20, 10], [0, 10])?;
+            world.place_route_in_line([5, 0], [5, 20])?;
+            world.place_route_in_line([10, 0], [10, 20])?;
+
+            world.place_tile(crate::world::WorldTile::Beacon(0), [10, 10])?;
+            world.place_tile(
+                crate::world::WorldTile::Airport(DirectionGrid::Left, 0),
+                [5, 10],
+            )?;
+
+            world.place_exit(DirectionGrid::Up, 10, 0)?;
+            world.place_exit(DirectionGrid::Down, 10, 1)?;
+
+            Ok(())
+        };
+        place_stuff(&mut world).expect("could not place tiles in world");
 
         Level {
             world,

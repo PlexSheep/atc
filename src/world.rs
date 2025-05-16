@@ -38,7 +38,8 @@ pub struct World {
     y: usize,
     tiles: Vec<Vec<WorldTile>>,
     planes: Vec<Plane>,
-    exits: HashMap<usize, HashSet<DirectionGrid>>,
+    //              Direction      WallPos Index
+    exits: HashMap<(DirectionGrid, usize), usize>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -75,7 +76,12 @@ impl World {
         }
     }
 
-    pub fn place_exit(&mut self, dir: DirectionGrid, pos: usize) -> Result<&mut Self, String> {
+    pub fn place_exit(
+        &mut self,
+        dir: DirectionGrid,
+        pos: usize,
+        idx: usize,
+    ) -> Result<&mut Self, String> {
         match dir {
             DirectionGrid::Up | DirectionGrid::Down => {
                 if !pos < self.y {
@@ -89,7 +95,7 @@ impl World {
             }
         }
 
-        self.exits.entry(pos).or_default().insert(dir);
+        self.exits.insert((dir, pos), idx);
 
         Ok(self)
     }
@@ -152,11 +158,11 @@ impl World {
     }
 
     fn get_wall(&self, pos: usize, dir: DirectionGrid) -> String {
-        match self.exits.get(&pos) {
-            Some(set) if set.contains(&dir) => {
-                format!("e{pos}")
+        match self.exits.get(&(dir, pos)) {
+            Some(exit_idx) => {
+                format!("e{exit_idx}")
             }
-            _ => match dir {
+            None => match dir {
                 DirectionGrid::Up => "──",
                 DirectionGrid::Down => "──",
                 DirectionGrid::Left => "│",
@@ -205,7 +211,7 @@ impl Display for World {
 
         // top border
         buf.push('┌');
-        for x in 1..self.x + 1 {
+        for x in 0..self.x {
             buf.push_str(&self.get_wall(x, DirectionGrid::Up));
         }
         buf.push('┐');
@@ -225,7 +231,7 @@ impl Display for World {
 
         // top border
         buf.push('└');
-        for x in 1..self.x + 1 {
+        for x in 0..self.x {
             buf.push_str(&self.get_wall(x, DirectionGrid::Down));
         }
         buf.push('┘');
@@ -308,6 +314,16 @@ mod test {
         println!("{}", world);
         for i in 0..20 {
             assert_eq!(world.tiles[i][i], WorldTile::Route);
+        }
+    }
+
+    #[test]
+    fn test_world_place_route_2() {
+        let mut world = World::new(20, 20);
+        world.place_route_in_line([20, 0], [0, 20]).unwrap();
+        println!("{}", world);
+        for i in 0..20 {
+            assert_eq!(world.tiles[20 - i][i], WorldTile::Route);
         }
     }
 }
