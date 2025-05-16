@@ -34,6 +34,7 @@ impl Level {
         Level {
             world,
             name: "default".to_string(),
+            seed: rand::random(),
         }
     }
 }

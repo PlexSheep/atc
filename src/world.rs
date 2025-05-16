@@ -1,8 +1,22 @@
 use std::{collections::HashMap, fmt::Display};
 
-use tracing::{debug, trace};
+use tracing::trace;
+
+pub const START_HEIGHT: u8 = 7;
+pub const EXIT_HEIGHT: u8 = 9;
 
 #[derive(Copy, Clone, Debug)]
+pub enum State {
+    Onging,
+    PlaneCollision(Plane, Plane),
+    WrongExit(Plane, usize),
+    WrongAirport(Plane, usize),
+    PlaneTouchesWall(Plane, DirectionGrid, usize),
+    PlaneCrash(Plane),
+    PlaneNoFuel(Plane),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Pos {
     pub x: usize,
     pub y: usize,
@@ -39,9 +53,16 @@ pub struct World {
     x: usize,
     y: usize,
     tiles: Vec<Vec<WorldTile>>,
-    planes: Vec<Plane>,
-    //              Direction      WallPos Index   DirectionToFlyIn
-    exits: HashMap<(DirectionGrid, usize), (usize, DirectionCardinal)>,
+    planes: HashMap<char, Plane>,
+    exits: HashMap<usize, Exit>,
+    plane_counter: u8,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Exit {
+    pub wall_direction: DirectionGrid,
+    pub plane_out_direction: DirectionCardinal,
+    pub wall_pos: usize,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -59,16 +80,75 @@ pub struct Plane {
     direction: DirectionCardinal,
     kind: PlaneKind,
     id: char,
+    ticks: usize,
+}
+
+impl Plane {
+    /// Err if no fiel left on plane
+    pub fn tick(&mut self) -> Result<(), ()> {
+        self.ticks += 1;
+
+        if self.out_of_fuel() {
+            return Err(());
+        }
+
+        if self.moves_this_tick() {
+            self.next_pos();
+        }
+
+        Ok(())
+    }
+    fn out_of_fuel(&self) -> bool {
+        self.ticks
+            >= match self.kind {
+                PlaneKind::Jet => 120,
+                PlaneKind::Small => 50,
+            }
+    }
+    fn next_pos(&mut self) {
+        match self.direction.clone() {
+            DirectionCardinal::North => self.pos.y += 1,
+            DirectionCardinal::NorthEast => {
+                self.pos.y += 1;
+                self.pos.x += 1
+            }
+            DirectionCardinal::NorthWest => {
+                self.pos.y += 1;
+                self.pos.x -= 1
+            }
+            DirectionCardinal::South => self.pos.y -= 1,
+            DirectionCardinal::SouthEast => {
+                self.pos.y -= 1;
+                self.pos.x += 1
+            }
+            DirectionCardinal::SouthWest => {
+                self.pos.y -= 1;
+                self.pos.x -= 1
+            }
+            DirectionCardinal::West => self.pos.x += 1,
+            DirectionCardinal::East => self.pos.x -= 1,
+        }
+    }
+
+    fn moves_this_tick(&self) -> bool {
+        self.ticks
+            % match self.kind {
+                PlaneKind::Jet => 1,
+                PlaneKind::Small => 2,
+            }
+            == 0
+    }
 }
 
 impl World {
     pub fn new(x: usize, y: usize) -> Self {
         World {
             tiles: vec![vec![WorldTile::Empty; x]; y],
-            planes: Vec::new(),
+            planes: HashMap::new(),
             exits: HashMap::new(),
             x,
             y,
+            plane_counter: 0,
         }
     }
 
@@ -76,24 +156,35 @@ impl World {
         &mut self,
         where_on_wall: DirectionGrid,
         plane_out_direction: DirectionCardinal,
-        pos: usize,
+        wall_pos: usize,
         idx: usize,
     ) -> Result<&mut Self, String> {
         match where_on_wall {
             DirectionGrid::Up | DirectionGrid::Down => {
-                if !pos < self.y {
-                    return Err(format!("exit pos is out of bounds: {} < {}", pos, self.y));
+                if !wall_pos < self.y {
+                    return Err(format!(
+                        "exit pos is out of bounds: {} < {}",
+                        wall_pos, self.y
+                    ));
                 }
             }
             DirectionGrid::Left | DirectionGrid::Right => {
-                if !pos < self.x {
-                    return Err(format!("exit pos is out of bounds: {} < {}", pos, self.x));
+                if !wall_pos < self.x {
+                    return Err(format!(
+                        "exit pos is out of bounds: {} < {}",
+                        wall_pos, self.x
+                    ));
                 }
             }
         }
 
-        self.exits
-            .insert((where_on_wall, pos), (idx, plane_out_direction));
+        let exit = Exit {
+            wall_direction: where_on_wall,
+            plane_out_direction,
+            wall_pos,
+        };
+
+        self.exits.insert(idx, exit);
 
         Ok(self)
     }
@@ -178,10 +269,17 @@ impl World {
     }
 
     fn get_wall(&self, pos: usize, dir: DirectionGrid) -> String {
-        match self.exits.get(&(dir, pos)) {
-            Some((exit_idx, _plane_out_dir)) => match dir {
-                DirectionGrid::Up | DirectionGrid::Down => format!("{exit_idx}─"),
-                DirectionGrid::Left | DirectionGrid::Right => format!("{exit_idx} "),
+        let mut maybe_exit_idx = None;
+        for (idx, exit) in &self.exits {
+            if exit.wall_pos == pos && exit.wall_direction == dir {
+                maybe_exit_idx = Some(idx)
+            }
+        }
+
+        match maybe_exit_idx {
+            Some(idx) => match dir {
+                DirectionGrid::Up | DirectionGrid::Down => format!("{idx}─"),
+                DirectionGrid::Left | DirectionGrid::Right => format!("{idx} "),
             },
             None => match dir {
                 DirectionGrid::Up => "──",
@@ -191,6 +289,98 @@ impl World {
             }
             .to_string(),
         }
+    }
+
+    fn next_plane_idx(&mut self) -> char {
+        const ORDER: [char; 25] = [
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r',
+            's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+        ];
+        let out = ORDER[self.plane_counter as usize % 25];
+        self.plane_counter += 1;
+        out
+    }
+
+    pub fn spawn_plane_at_exit(&mut self, exit_id: usize, kind: PlaneKind) -> Result<(), String> {
+        let exit = match self.exits.get(&exit_id) {
+            Some(e) => e.clone(),
+            None => return Err(format!("No exit for this id: {exit_id}")),
+        };
+        let pos = match exit.plane_out_direction {
+            DirectionCardinal::North => [exit.wall_pos, 0].into(),
+            // DirectionCardinal::NorthEast => [(exit.wall_pos -1).clamp(0, self.x), 0].into(),
+            // DirectionCardinal::NorthWest => [(exit.wall_pos +1).clamp(0, self.x), 0].into(),
+            DirectionCardinal::South => [exit.wall_pos, self.y - 1].into(),
+            // DirectionCardinal::SouthEast => [(exit.wall_pos -1).clamp(0, self.y), 0].into(),
+            // DirectionCardinal::SouthWest => [(exit.wall_pos +1).clamp(0, self.y), 0].into(),
+            DirectionCardinal::West => [0, exit.wall_pos].into(),
+            DirectionCardinal::East => [self.x - 1, exit.wall_pos].into(),
+            _ => todo!(),
+        };
+        let id: char = self.next_plane_idx();
+        let plane = Plane {
+            pos,
+            height: START_HEIGHT,
+            direction: exit.plane_out_direction.opposite(),
+            kind,
+            id,
+            ticks: Default::default(),
+        };
+        self.planes.insert(id, plane);
+        Ok(())
+    }
+
+    fn collision_check(&self) -> Option<(Plane, Plane)> {
+        todo!()
+    }
+
+    fn wall_collision_check(&self) -> Option<(Plane, DirectionGrid, usize)> {
+        todo!()
+    }
+
+    /// Removes planes that exit and returns Some if a plane took the wrong exit
+    ///
+    /// None if everything is ok, some only if a plane took the wrong exit
+    fn planes_take_exits(&mut self) -> Option<(Plane, usize)> {
+        todo!()
+    }
+
+    /// Removes planes that exit and returns Some if a plane took the wrong exit
+    ///
+    /// Returns:
+    ///
+    /// - None: Everything is okay. Maybe a plane landed at the correct airport and was removed
+    /// - Some(Plane, None): A plane crashed on the ground (height 0)
+    /// - Some(Plane, Some(airport_id)): A plane landed in the wrong airport
+    fn planes_land(&mut self) -> Option<(Plane, Option<usize>)> {
+        todo!()
+    }
+
+    pub fn tick_planes(&mut self) -> State {
+        for (_plane_id, plane) in &mut self.planes {
+            if let Err(()) = plane.tick() {
+                return State::PlaneNoFuel(*plane);
+            }
+        }
+
+        if let Some((plane, exit_id)) = self.planes_take_exits() {
+            return State::WrongExit(plane, exit_id);
+        }
+        if let Some((plane, id_of_wrong_airport)) = self.planes_land() {
+            if let Some(airport_id) = id_of_wrong_airport {
+                return State::WrongAirport(plane, airport_id);
+            } else {
+                return State::PlaneCrash(plane);
+            }
+        }
+        if let Some((plane_a, plane_b)) = self.collision_check() {
+            return State::PlaneCollision(plane_a, plane_b);
+        }
+        if let Some((plane, direction, wall_pos)) = self.wall_collision_check() {
+            return State::PlaneTouchesWall(plane, direction, wall_pos);
+        }
+
+        State::Onging
     }
 }
 
@@ -257,7 +447,13 @@ impl Display for World {
         // inner map
         for (y, row) in self.tiles.iter().enumerate() {
             buf.push_str(&self.get_wall(y, DirectionGrid::Left));
-            for tile in row {
+            'tile: for (x, tile) in row.iter().enumerate() {
+                for plane in self.planes.values() {
+                    if plane.pos == [x, y].into() {
+                        buf.push_str(&plane.to_string());
+                        continue 'tile;
+                    }
+                }
                 buf.push_str(&tile.to_string());
             }
             buf.push_str(&self.get_wall(y, DirectionGrid::Right));
