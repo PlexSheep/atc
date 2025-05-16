@@ -59,13 +59,10 @@ impl App {
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
     fn render(&mut self, frame: &mut Frame) {
-        let title = Line::from("Ratatui Simple Template")
+        let title = Line::from("Air Traffic Controller")
             .bold()
             .blue()
             .centered();
-        let text = "Hello, Ratatui!\n\n\
-            Created using https://github.com/ratatui/templates\n\
-            Press `Esc`, `Ctrl-C` or `q` to stop running.";
         let map: String = self.level.render();
         frame.render_widget(
             Paragraph::new(map).block(Block::bordered().title(title)),

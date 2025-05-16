@@ -1,8 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    usize,
-};
+use std::{collections::HashMap, fmt::Display};
+
+use tracing::{debug, trace};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Pos {
@@ -59,12 +57,6 @@ pub struct Plane {
     id: char,
 }
 
-impl Pos {
-    pub fn sum(self) -> usize {
-        self.x + self.y
-    }
-}
-
 impl World {
     pub fn new(x: usize, y: usize) -> Self {
         World {
@@ -113,12 +105,14 @@ impl World {
 
     fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), String> {
         let pos = pos.into();
-        if !pos.x < self.x {
+        trace!("check if pos in bounds: {pos:?}");
+        if pos.x + 1 > self.x {
             return Err(format!("x is out of bounds: {} < {}", pos.x, self.x));
         }
-        if !pos.y < self.y {
+        if pos.y + 1 > self.y {
             return Err(format!("y is out of bounds: {} < {}", pos.y, self.y));
         }
+        trace!("pos in is bounds: {pos:?}");
         Ok(())
     }
 
@@ -128,30 +122,47 @@ impl World {
         a: impl Into<Pos>,
         b: impl Into<Pos>,
     ) -> Result<&mut Self, String> {
-        let mut a: Pos = a.into();
-        let mut b: Pos = b.into();
+        let a: Pos = a.into();
+        let b: Pos = b.into();
 
+        trace!("pos a: {a:?}");
+        trace!("pos b: {a:?}");
         self.check_pos_bounds(a)?;
         self.check_pos_bounds(b)?;
 
-        if a.sum() > b.sum() {
-            std::mem::swap(&mut a, &mut b);
-        }
-
         let dx: i32 = b.x as i32 - a.x as i32;
         let dy: i32 = b.y as i32 - a.y as i32;
-        let mut d: i32 = 2 * dy - dx;
-        let mut y = a.y;
 
-        let range = if a.x < b.x { a.x..b.x } else { b.x..a.x };
+        let sx: i32 = if dx > 0 { 1 } else { -1 };
+        let sy: i32 = if dy > 0 { 1 } else { -1 };
 
-        for x in range {
-            self.place_tile(WorldTile::Route, [x, y]);
-            if d > 0 {
+        let mut dx: usize = dx.unsigned_abs() as usize;
+        let mut dy: usize = dy.unsigned_abs() as usize;
+
+        let (mut xx, mut xy, mut yx, mut yy) = (0, 0, 0, 0);
+        if dx > dy {
+            (xx, xy, yx, yy) = (sx, 0, 0, sy);
+        } else {
+            std::mem::swap(&mut dx, &mut dy);
+            (xx, xy, yx, yy) = (0, sy, sx, 0);
+        }
+
+        let mut D: i32 = 2 * dy as i32 - dx as i32;
+        let mut y = 0;
+        let mut pos: Pos;
+
+        for x in 0..dx + 1 {
+            pos = (
+                a.x as i32 + x as i32 * xx + y * yx,
+                a.y as i32 + x as i32 * xy + y * yy,
+            )
+                .try_into()?;
+            self.place_tile(WorldTile::Route, pos)?;
+            if D >= 0 {
                 y += 1;
-                d -= 2 * dx;
+                D -= 2 * dx as i32;
             }
-            d += 2 * dy;
+            D += 2 * dy as i32;
         }
 
         Ok(self)
@@ -275,6 +286,21 @@ impl From<DirectionGrid> for DirectionCardinal {
     }
 }
 
+impl TryFrom<(i32, i32)> for Pos {
+    type Error = String;
+
+    fn try_from(value: (i32, i32)) -> Result<Self, Self::Error> {
+        if value.0 >= 0 && value.1 >= 0 {
+            Ok(Pos {
+                x: value.0 as usize,
+                y: value.1 as usize,
+            })
+        } else {
+            Err("Negative Positions are not allowed".to_string())
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::world::WorldTile;
@@ -285,14 +311,14 @@ mod test {
     #[should_panic]
     fn test_world_place_route_out_of_bounds() {
         let mut world = World::new(20, 20);
-        world.place_route_in_line([0, 0], [21, 20]).unwrap();
-        for i in 0..20 {
+        world.place_route_in_line([0, 0], [20, 19]).unwrap();
+        for i in 0..19 {
             assert_eq!(world.tiles[i][i], WorldTile::Route);
         }
 
         let mut world = World::new(20, 20);
-        world.place_route_in_line([0, 0], [20, 21]).unwrap();
-        for i in 0..20 {
+        world.place_route_in_line([0, 0], [19, 20]).unwrap();
+        for i in 0..19 {
             assert_eq!(world.tiles[i][i], WorldTile::Route);
         }
     }
@@ -300,9 +326,9 @@ mod test {
     #[test]
     fn test_world_place_route_0() {
         let mut world = World::new(20, 20);
-        world.place_route_in_line([0, 0], [20, 20]).unwrap();
+        world.place_route_in_line([0, 0], [19, 19]).unwrap();
         println!("{}", world);
-        for i in 0..20 {
+        for i in 0..19 {
             assert_eq!(world.tiles[i][i], WorldTile::Route);
         }
     }
@@ -310,9 +336,9 @@ mod test {
     #[test]
     fn test_world_place_route_1() {
         let mut world = World::new(20, 20);
-        world.place_route_in_line([20, 20], [0, 0]).unwrap();
+        world.place_route_in_line([19, 19], [0, 0]).unwrap();
         println!("{}", world);
-        for i in 0..20 {
+        for i in 0..19 {
             assert_eq!(world.tiles[i][i], WorldTile::Route);
         }
     }
@@ -320,10 +346,10 @@ mod test {
     #[test]
     fn test_world_place_route_2() {
         let mut world = World::new(20, 20);
-        world.place_route_in_line([20, 0], [0, 20]).unwrap();
+        world.place_route_in_line([19, 0], [0, 19]).unwrap();
         println!("{}", world);
-        for i in 0..20 {
-            assert_eq!(world.tiles[20 - i][i], WorldTile::Route);
+        for i in 0..19 {
+            assert_eq!(world.tiles[19 - i][i], WorldTile::Route);
         }
     }
 }

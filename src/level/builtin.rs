@@ -10,9 +10,9 @@ impl Level {
         let mut world = World::new(X, Y);
 
         fn place_stuff(world: &mut World) -> Result<(), String> {
-            world.place_route_in_line([20, 10], [0, 10])?;
-            world.place_route_in_line([5, 0], [5, 20])?;
-            world.place_route_in_line([10, 0], [10, 20])?;
+            world.place_route_in_line([19, 10], [0, 10])?;
+            world.place_route_in_line([5, 0], [5, 19])?;
+            world.place_route_in_line([10, 0], [10, 19])?;
 
             world.place_tile(crate::world::WorldTile::Beacon(0), [10, 10])?;
             world.place_tile(
