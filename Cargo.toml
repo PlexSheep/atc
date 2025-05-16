@@ -13,3 +13,7 @@ keywords = ["template"]
 
 
 [dependencies]
+crossterm = "0.28.1"
+ratatui = "0.29.0"
+color-eyre = "0.6.3"
+rand = "0.9.1"
