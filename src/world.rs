@@ -1,4 +1,4 @@
-use std::{fmt::Display, usize};
+use std::{fmt::Display, ops::RangeBounds, usize};
 
 use tracing::{debug, info, trace};
 
@@ -14,7 +14,7 @@ pub enum PlaneKind {
     Jet,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DirectionGrid {
     Up,
     Down,
@@ -38,7 +38,7 @@ pub struct World {
     planes: Vec<Plane>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum WorldTile {
     Empty,
     Route,
@@ -53,6 +53,12 @@ pub struct Plane {
     direction: DirectionCardinal,
     kind: PlaneKind,
     id: char,
+}
+
+impl Pos {
+    pub fn sum(self) -> usize {
+        self.x + self.y
+    }
 }
 
 impl World {
@@ -71,27 +77,50 @@ impl World {
         self
     }
 
+    fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), String> {
+        let pos = pos.into();
+        if !pos.x < self.x {
+            return Err(format!("x is out of bounds: {} < {}", pos.x, self.x));
+        }
+        if !pos.y < self.y {
+            return Err(format!("y is out of bounds: {} < {}", pos.y, self.y));
+        }
+        Ok(())
+    }
+
     /// Uses Bresenham's line algorithm to place route tiles between tiles
-    pub fn place_route_in_line(&mut self, a: impl Into<Pos>, b: impl Into<Pos>) -> &mut Self {
-        let a: Pos = a.into();
-        let b: Pos = b.into();
+    pub fn place_route_in_line(
+        &mut self,
+        a: impl Into<Pos>,
+        b: impl Into<Pos>,
+    ) -> Result<&mut Self, String> {
+        let mut a: Pos = a.into();
+        let mut b: Pos = b.into();
 
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let mut d = 2 * dy - dx;
+        self.check_pos_bounds(a)?;
+        self.check_pos_bounds(b)?;
+
+        if a.sum() > b.sum() {
+            std::mem::swap(&mut a, &mut b);
+        }
+
+        let dx: i32 = b.x as i32 - a.x as i32;
+        let dy: i32 = b.y as i32 - a.y as i32;
+        let mut d: i32 = 2 * dy - dx;
         let mut y = a.y;
-        trace!("place_route_in_line: d={d} y={y} dx={dx} dy={dy}");
 
-        for x in a.x..b.x {
+        let range = if a.x < b.x { a.x..b.x } else { b.x..a.x };
+
+        for x in range {
             self.place_tile(WorldTile::Route, [x, y]);
             if d > 0 {
                 y += 1;
-            } else {
-                d += 2 * dy;
+                d -= 2 * dx;
             }
-            trace!("place_route_in_line: d={d} y={y} dx={dx} dy={dy}");
+            d += 2 * dy;
         }
-        self
+
+        Ok(self)
     }
 }
 
@@ -116,8 +145,8 @@ impl Display for WorldTile {
             f,
             "{}",
             match self {
-                Self::Empty => format!(". "),
-                Self::Route => format!("+ "),
+                Self::Empty => ". ".to_string(),
+                Self::Route => "+ ".to_string(),
                 Self::Beacon(idx) => format!("{idx}"),
                 Self::Airport(dir, idx) => format!("{dir}{idx}"),
             }
@@ -128,11 +157,21 @@ impl Display for WorldTile {
 impl Display for World {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::new();
-        for row in &self.tiles {
+        for (y, row) in self.tiles.iter().enumerate() {
             for tile in row {
                 buf.push_str(&tile.to_string());
             }
+            if y % 2 == 0 {
+                buf.push_str(&format!("{:}", y));
+            }
             buf.push('\n');
+        }
+        for x in 0..self.x {
+            if x % 2 == 0 {
+                buf.push_str(&format!("{:02}", x));
+            } else {
+                buf.push_str("  ");
+            }
         }
         write!(f, "{buf}")
     }
@@ -164,6 +203,49 @@ impl From<DirectionGrid> for DirectionCardinal {
             DirectionGrid::Down => DirectionCardinal::Down,
             DirectionGrid::Left => DirectionCardinal::Left,
             DirectionGrid::Right => DirectionCardinal::Right,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::world::WorldTile;
+
+    use super::World;
+
+    #[test]
+    #[should_panic]
+    fn test_world_place_route_out_of_bounds() {
+        let mut world = World::new(20, 20);
+        world.place_route_in_line([0, 0], [21, 20]).unwrap();
+        for i in 0..20 {
+            assert_eq!(world.tiles[i][i], WorldTile::Route);
+        }
+
+        let mut world = World::new(20, 20);
+        world.place_route_in_line([0, 0], [20, 21]).unwrap();
+        for i in 0..20 {
+            assert_eq!(world.tiles[i][i], WorldTile::Route);
+        }
+    }
+
+    #[test]
+    fn test_world_place_route_0() {
+        let mut world = World::new(20, 20);
+        world.place_route_in_line([0, 0], [20, 20]).unwrap();
+        println!("{}", world);
+        for i in 0..20 {
+            assert_eq!(world.tiles[i][i], WorldTile::Route);
+        }
+    }
+
+    #[test]
+    fn test_world_place_route_1() {
+        let mut world = World::new(20, 20);
+        world.place_route_in_line([20, 20], [0, 0]).unwrap();
+        println!("{}", world);
+        for i in 0..20 {
+            assert_eq!(world.tiles[i][i], WorldTile::Route);
         }
     }
 }
