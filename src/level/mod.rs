@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use rand::random_bool;
-
 use crate::world::World;
 
 pub mod builtin;

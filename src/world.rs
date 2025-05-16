@@ -106,7 +106,7 @@ impl Plane {
             }
     }
     fn next_pos(&mut self) {
-        match self.direction.clone() {
+        match self.direction {
             DirectionCardinal::North => self.pos.y += 1,
             DirectionCardinal::NorthEast => {
                 self.pos.y += 1;
@@ -303,7 +303,7 @@ impl World {
 
     pub fn spawn_plane_at_exit(&mut self, exit_id: usize, kind: PlaneKind) -> Result<(), String> {
         let exit = match self.exits.get(&exit_id) {
-            Some(e) => e.clone(),
+            Some(e) => *e,
             None => return Err(format!("No exit for this id: {exit_id}")),
         };
         let pos = match exit.plane_out_direction {
@@ -357,7 +357,7 @@ impl World {
     }
 
     pub fn tick_planes(&mut self) -> State {
-        for (_plane_id, plane) in &mut self.planes {
+        for plane in self.planes.values_mut() {
             if let Err(()) = plane.tick() {
                 return State::PlaneNoFuel(*plane);
             }
