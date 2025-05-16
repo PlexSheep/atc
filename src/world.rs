@@ -24,10 +24,14 @@ pub enum DirectionGrid {
 
 #[derive(Copy, Clone, Debug)]
 pub enum DirectionCardinal {
-    Up,
-    Down,
-    Left,
-    Right,
+    North,
+    East,
+    South,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
 }
 
 #[derive(Debug)]
@@ -36,8 +40,8 @@ pub struct World {
     y: usize,
     tiles: Vec<Vec<WorldTile>>,
     planes: Vec<Plane>,
-    //              Direction      WallPos Index
-    exits: HashMap<(DirectionGrid, usize), usize>,
+    //              Direction      WallPos Index   DirectionToFlyIn
+    exits: HashMap<(DirectionGrid, usize), (usize, DirectionCardinal)>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -70,11 +74,12 @@ impl World {
 
     pub fn place_exit(
         &mut self,
-        dir: DirectionGrid,
+        where_on_wall: DirectionGrid,
+        plane_out_direction: DirectionCardinal,
         pos: usize,
         idx: usize,
     ) -> Result<&mut Self, String> {
-        match dir {
+        match where_on_wall {
             DirectionGrid::Up | DirectionGrid::Down => {
                 if !pos < self.y {
                     return Err(format!("exit pos is out of bounds: {} < {}", pos, self.y));
@@ -87,7 +92,8 @@ impl World {
             }
         }
 
-        self.exits.insert((dir, pos), idx);
+        self.exits
+            .insert((where_on_wall, pos), (idx, plane_out_direction));
 
         Ok(self)
     }
@@ -139,7 +145,10 @@ impl World {
         let mut dx: usize = dx.unsigned_abs() as usize;
         let mut dy: usize = dy.unsigned_abs() as usize;
 
-        let (mut xx, mut xy, mut yx, mut yy) = (0, 0, 0, 0);
+        let xx;
+        let xy;
+        let yx;
+        let yy;
         if dx > dy {
             (xx, xy, yx, yy) = (sx, 0, 0, sy);
         } else {
@@ -147,7 +156,7 @@ impl World {
             (xx, xy, yx, yy) = (0, sy, sx, 0);
         }
 
-        let mut D: i32 = 2 * dy as i32 - dx as i32;
+        let mut d: i32 = 2 * dy as i32 - dx as i32;
         let mut y = 0;
         let mut pos: Pos;
 
@@ -158,11 +167,11 @@ impl World {
             )
                 .try_into()?;
             self.place_tile(WorldTile::Route, pos)?;
-            if D >= 0 {
+            if d >= 0 {
                 y += 1;
-                D -= 2 * dx as i32;
+                d -= 2 * dx as i32;
             }
-            D += 2 * dy as i32;
+            d += 2 * dy as i32;
         }
 
         Ok(self)
@@ -170,16 +179,32 @@ impl World {
 
     fn get_wall(&self, pos: usize, dir: DirectionGrid) -> String {
         match self.exits.get(&(dir, pos)) {
-            Some(exit_idx) => {
-                format!("e{exit_idx}")
-            }
+            Some((exit_idx, _plane_out_dir)) => match dir {
+                DirectionGrid::Up | DirectionGrid::Down => format!("{exit_idx}─"),
+                DirectionGrid::Left | DirectionGrid::Right => format!("{exit_idx} "),
+            },
             None => match dir {
                 DirectionGrid::Up => "──",
                 DirectionGrid::Down => "──",
-                DirectionGrid::Left => "│",
-                DirectionGrid::Right => "│",
+                DirectionGrid::Left => "│ ",
+                DirectionGrid::Right => "│ ",
             }
             .to_string(),
+        }
+    }
+}
+
+impl DirectionCardinal {
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::North => Self::South,
+            Self::East => Self::West,
+            Self::South => Self::North,
+            Self::West => Self::East,
+            Self::NorthEast => Self::SouthWest,
+            Self::NorthWest => Self::SouthEast,
+            Self::SouthEast => Self::NorthWest,
+            Self::SouthWest => Self::NorthEast,
         }
     }
 }
@@ -221,7 +246,7 @@ impl Display for World {
         let mut lines = Vec::new();
 
         // top border
-        buf.push('┌');
+        buf.push_str("┌─");
         for x in 0..self.x {
             buf.push_str(&self.get_wall(x, DirectionGrid::Up));
         }
@@ -241,7 +266,7 @@ impl Display for World {
         }
 
         // top border
-        buf.push('└');
+        buf.push_str("└─");
         for x in 0..self.x {
             buf.push_str(&self.get_wall(x, DirectionGrid::Down));
         }
@@ -278,10 +303,10 @@ impl From<[usize; 2]> for Pos {
 impl From<DirectionGrid> for DirectionCardinal {
     fn from(value: DirectionGrid) -> Self {
         match value {
-            DirectionGrid::Up => DirectionCardinal::Up,
-            DirectionGrid::Down => DirectionCardinal::Down,
-            DirectionGrid::Left => DirectionCardinal::Left,
-            DirectionGrid::Right => DirectionCardinal::Right,
+            DirectionGrid::Up => DirectionCardinal::North,
+            DirectionGrid::Down => DirectionCardinal::South,
+            DirectionGrid::Left => DirectionCardinal::West,
+            DirectionGrid::Right => DirectionCardinal::East,
         }
     }
 }
