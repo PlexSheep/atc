@@ -1,6 +1,8 @@
-use std::{fmt::Display, ops::RangeBounds, usize};
-
-use tracing::{debug, info, trace};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    usize,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Pos {
@@ -14,7 +16,7 @@ pub enum PlaneKind {
     Jet,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DirectionGrid {
     Up,
     Down,
@@ -36,6 +38,7 @@ pub struct World {
     y: usize,
     tiles: Vec<Vec<WorldTile>>,
     planes: Vec<Plane>,
+    exits: HashMap<usize, HashSet<DirectionGrid>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -66,15 +69,40 @@ impl World {
         World {
             tiles: vec![vec![WorldTile::Empty; x]; y],
             planes: Vec::new(),
+            exits: HashMap::new(),
             x,
             y,
         }
     }
 
-    pub fn place_tile(&mut self, tile: WorldTile, pos: impl Into<Pos>) -> &mut Self {
+    pub fn place_exit(&mut self, dir: DirectionGrid, pos: usize) -> Result<&mut Self, String> {
+        match dir {
+            DirectionGrid::Up | DirectionGrid::Down => {
+                if !pos < self.y {
+                    return Err(format!("exit pos is out of bounds: {} < {}", pos, self.y));
+                }
+            }
+            DirectionGrid::Left | DirectionGrid::Right => {
+                if !pos < self.x {
+                    return Err(format!("exit pos is out of bounds: {} < {}", pos, self.x));
+                }
+            }
+        }
+
+        self.exits.entry(pos).or_default().insert(dir);
+
+        Ok(self)
+    }
+
+    pub fn place_tile(
+        &mut self,
+        tile: WorldTile,
+        pos: impl Into<Pos>,
+    ) -> Result<&mut Self, String> {
         let pos: Pos = pos.into();
+        self.check_pos_bounds(pos)?;
         self.tiles[pos.y][pos.x] = tile;
-        self
+        Ok(self)
     }
 
     fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), String> {
@@ -122,6 +150,21 @@ impl World {
 
         Ok(self)
     }
+
+    fn get_wall(&self, pos: usize, dir: DirectionGrid) -> String {
+        match self.exits.get(&pos) {
+            Some(set) if set.contains(&dir) => {
+                format!("e{pos}")
+            }
+            _ => match dir {
+                DirectionGrid::Up => "──",
+                DirectionGrid::Down => "──",
+                DirectionGrid::Left => "│",
+                DirectionGrid::Right => "│",
+            }
+            .to_string(),
+        }
+    }
 }
 
 impl Display for DirectionGrid {
@@ -147,7 +190,7 @@ impl Display for WorldTile {
             match self {
                 Self::Empty => ". ".to_string(),
                 Self::Route => "+ ".to_string(),
-                Self::Beacon(idx) => format!("{idx}"),
+                Self::Beacon(idx) => format!("b{idx}"),
                 Self::Airport(dir, idx) => format!("{dir}{idx}"),
             }
         )
@@ -157,22 +200,41 @@ impl Display for WorldTile {
 impl Display for World {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::new();
+
+        let mut lines = Vec::new();
+
+        // top border
+        buf.push('┌');
+        for x in 1..self.x + 1 {
+            buf.push_str(&self.get_wall(x, DirectionGrid::Up));
+        }
+        buf.push('┐');
+        lines.push(buf.clone());
+        buf.clear();
+
+        // inner map
         for (y, row) in self.tiles.iter().enumerate() {
+            buf.push_str(&self.get_wall(y, DirectionGrid::Left));
             for tile in row {
                 buf.push_str(&tile.to_string());
             }
-            if y % 2 == 0 {
-                buf.push_str(&format!("{:}", y));
-            }
-            buf.push('\n');
+            buf.push_str(&self.get_wall(y, DirectionGrid::Right));
+            lines.push(buf.clone());
+            buf.clear();
         }
-        for x in 0..self.x {
-            if x % 2 == 0 {
-                buf.push_str(&format!("{:02}", x));
-            } else {
-                buf.push_str("  ");
-            }
+
+        // top border
+        buf.push('└');
+        for x in 1..self.x + 1 {
+            buf.push_str(&self.get_wall(x, DirectionGrid::Down));
         }
+        buf.push('┘');
+        lines.push(buf.clone());
+        buf.clear();
+
+        // actual output
+        buf = lines.join("\n");
+
         write!(f, "{buf}")
     }
 }

@@ -21,7 +21,7 @@ impl Level {
         &mut self.world
     }
     pub fn tick(&mut self) {
-        todo!()
+        // todo!()
     }
     pub fn render(&self) -> String {
         self.world.to_string()
@@ -31,5 +31,21 @@ impl Level {
 impl Display for Level {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.world.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_level_render_default() {
+        let level = Level::builtin();
+        let rendered = level.render();
+        assert!(rendered.contains("+ "));
+        assert!(rendered.contains(". "));
+        assert!(rendered.contains("e0"));
+        assert!(rendered.contains("e1"));
+        assert!(rendered.contains("b0"));
     }
 }

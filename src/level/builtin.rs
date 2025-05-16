@@ -11,6 +11,7 @@ impl Level {
         world.place_route_in_line([0, 0], [20, 10]).unwrap();
         world.place_route_in_line([2, 6], [14, 8]).unwrap();
         world.place_route_in_line([20, 20], [0, 0]).unwrap();
+        world.place_tile(crate::world::WorldTile::Beacon(0), [10, 10]);
 
         Level {
             world,
