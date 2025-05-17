@@ -1,5 +1,8 @@
 use crate::world::{DirectionCardinal, PlaneKind, Pos};
 
+pub const START_HEIGHT: u8 = 7;
+pub const EXIT_HEIGHT: u8 = 9;
+
 #[derive(Copy, Clone, Debug)]
 pub enum Destination {
     Exit(u8),
@@ -15,9 +18,29 @@ pub struct Plane {
     pub id: char,
     pub ticks: usize,
     pub destination: Destination,
+    pub just_spawned: bool,
 }
 
 impl Plane {
+    pub fn new(
+        pos: Pos,
+        direction: DirectionCardinal,
+        kind: PlaneKind,
+        id: char,
+        destination: Destination,
+    ) -> Self {
+        Self {
+            pos,
+            height: START_HEIGHT,
+            direction,
+            kind,
+            id,
+            ticks: 0,
+            destination,
+            just_spawned: true,
+        }
+    }
+
     /// Err if no fiel left on plane
     pub fn tick(&mut self) -> Result<(), ()> {
         self.ticks += 1;
@@ -28,6 +51,10 @@ impl Plane {
 
         if self.moves_this_tick() {
             self.next_pos();
+        }
+
+        if self.ticks == 2 {
+            self.just_spawned = false;
         }
 
         Ok(())
@@ -41,7 +68,7 @@ impl Plane {
     }
     fn next_pos(&mut self) {
         match self.direction.clone() {
-            DirectionCardinal::North => self.pos.y += 1,
+            DirectionCardinal::North => self.pos.y -= 1,
             DirectionCardinal::NorthEast => {
                 self.pos.y += 1;
                 self.pos.x += 1
@@ -50,7 +77,7 @@ impl Plane {
                 self.pos.y += 1;
                 self.pos.x -= 1
             }
-            DirectionCardinal::South => self.pos.y -= 1,
+            DirectionCardinal::South => self.pos.y += 1,
             DirectionCardinal::SouthEast => {
                 self.pos.y -= 1;
                 self.pos.x += 1

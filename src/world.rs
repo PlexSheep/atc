@@ -4,9 +4,6 @@ use tracing::trace;
 
 use crate::plane::{Destination, Plane};
 
-pub const START_HEIGHT: u8 = 7;
-pub const EXIT_HEIGHT: u8 = 9;
-
 #[derive(Copy, Clone, Debug)]
 pub enum State {
     Onging,
@@ -253,15 +250,13 @@ impl World {
             _ => todo!(),
         };
         let id: char = self.next_plane_idx();
-        let plane = Plane {
+        let plane = Plane::new(
             pos,
-            height: START_HEIGHT,
-            direction: exit.plane_out_direction.opposite(),
+            exit.plane_out_direction.opposite(),
             kind,
             id,
-            ticks: Default::default(),
-            destination: Destination::Exit(1),
-        };
+            Destination::Exit(1),
+        );
         self.planes.insert(id, plane);
         Ok(())
     }
@@ -279,6 +274,9 @@ impl World {
     /// None if everything is ok, some only if a plane took the wrong exit
     fn planes_take_exits(&mut self) -> Option<(Plane, u8)> {
         for (pid, plane) in self.planes.clone() {
+            if plane.just_spawned {
+                continue;
+            }
             if plane.pos.y == 0 {
                 for (eid, exit) in self
                     .exits
