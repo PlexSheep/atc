@@ -238,7 +238,7 @@ impl World {
 
     pub fn spawn_plane_at_exit(&mut self, exit_id: u8, kind: PlaneKind) -> Result<(), String> {
         let exit = match self.exits.get(&exit_id) {
-            Some(e) => e.clone(),
+            Some(e) => *e,
             None => return Err(format!("No exit for this id: {exit_id}")),
         };
         let pos = match exit.plane_out_direction {

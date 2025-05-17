@@ -14,51 +14,50 @@ mod world;
 use level::Level;
 use tracing::{info, trace};
 
-fn main() -> color_eyre::Result<()> {
-    setup_logging();
-    color_eyre::install()?;
-    let terminal = ratatui::init();
-    let result = App::new().run(terminal);
-    ratatui::restore();
-    result
-}
-
 #[derive(Debug)]
 pub struct App {
-    running: bool,
-    pause: bool,
-    must_exit: bool,
+    state: GameState,
     level: Level,
     status_info: Option<String>,
+}
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+enum GameState {
+    #[default]
+    Startup,
+    Ongoing,
+    Results,
+    Exit,
 }
 
 impl App {
     /// Construct a new instance of [`App`].
     pub fn new() -> Self {
         Self {
-            running: true,
-            pause: false,
+            state: Default::default(),
             level: Level::builtin(),
             status_info: Default::default(),
-            must_exit: false,
         }
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        while self.running {
-            self.running = !self.must_exit;
+        while self.state != GameState::Exit {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_crossterm_events()?;
-            if !self.pause {
-                match self.level.tick() {
+            match self.state {
+                GameState::Startup => {
+                    self.state = GameState::Ongoing;
+                }
+                GameState::Ongoing => match self.level.tick() {
                     world::State::Onging => (),
                     other => {
                         self.status_info = Some(format!("{other}"));
-                        self.must_exit = true;
-                        self.pause = true;
+                        self.state = GameState::Results;
                     }
-                }
+                },
+                GameState::Results => self.state = GameState::Exit,
+                GameState::Exit => break,
             }
         }
         Ok(())
@@ -115,7 +114,7 @@ impl App {
 
     /// Set running to false to quit the application.
     fn quit(&mut self) {
-        self.running = false;
+        self.state = GameState::Exit;
     }
 }
 
@@ -146,4 +145,13 @@ fn setup_logging() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("could not setup logger");
     trace!("Setup logging");
+}
+
+fn main() -> color_eyre::Result<()> {
+    setup_logging();
+    color_eyre::install()?;
+    let terminal = ratatui::init();
+    let result = App::new().run(terminal);
+    ratatui::restore();
+    result
 }
