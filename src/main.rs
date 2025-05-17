@@ -8,6 +8,7 @@ use ratatui::{
 };
 
 mod level;
+mod plane;
 mod world;
 
 use level::Level;
