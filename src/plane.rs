@@ -37,7 +37,10 @@ impl Plane {
             height: START_HEIGHT,
             direction,
             kind,
-            id,
+            id: match kind {
+                PlaneKind::Small => id.to_ascii_uppercase(),
+                PlaneKind::Jet => id.to_ascii_lowercase(),
+            },
             ticks: 0,
             destination,
             just_spawned: true,
