@@ -16,11 +16,17 @@ mod world;
 use level::Level;
 use tracing::{info, trace};
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct AppFlags {
+    pub accept: bool,
+}
+
 #[derive(Debug)]
 pub struct App {
     state: GameState,
     level: Level,
     status_info: Option<String>,
+    flags: AppFlags,
 }
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -39,6 +45,7 @@ impl App {
             state: Default::default(),
             level: Level::builtin(),
             status_info: Default::default(),
+            flags: Default::default(),
         }
     }
 
@@ -58,7 +65,12 @@ impl App {
                         self.state = GameState::Results;
                     }
                 },
-                GameState::Results => self.state = GameState::Exit,
+                GameState::Results => {
+                    if self.flags.accept {
+                        self.state = GameState::Exit;
+                        self.flags.accept = false
+                    }
+                }
                 GameState::Exit => break,
             }
         }
@@ -88,9 +100,9 @@ impl App {
             Paragraph::new(map).block(Block::bordered().title(title)),
             map_area,
         );
-        if let Some(status_info) = self.status_info.take() {
+        if let Some(status_info) = self.status_info.as_ref() {
             frame.render_widget(
-                Paragraph::new(status_info).block(Block::bordered()),
+                Paragraph::new(status_info.as_str()).block(Block::bordered()),
                 status_area,
             )
         }
@@ -114,9 +126,9 @@ impl App {
     /// Handles the key events and updates the state of [`App`].
     fn on_key_event(&mut self, key: KeyEvent) {
         match (key.modifiers, key.code) {
-            (_, KeyCode::Esc | KeyCode::Char('q'))
+            (_, KeyCode::Esc)
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            // Add other key handlers here.
+            (_, KeyCode::Enter) => self.flags.accept = true,
             _ => {}
         }
     }

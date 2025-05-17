@@ -31,7 +31,7 @@ impl Level {
             world.place_exit(DirectionGrid::Down, DirectionCardinal::North, 12, 4)?;
 
             Ok(())
-        };
+        }
         place_stuff(&mut world).expect("could not place tiles in world");
 
         Level {
