@@ -22,7 +22,7 @@ impl Level {
         &mut self.world
     }
     pub fn tick(&mut self) -> State {
-        if rand::random_bool(0.2) {
+        if rand::random_bool(0.05) {
             // TODO: add get_max_exit_id function
             self.world
                 .spawn_plane_at_exit(4, crate::world::PlaneKind::Small)
