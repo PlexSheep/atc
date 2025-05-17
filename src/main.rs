@@ -11,7 +11,7 @@ mod level;
 mod world;
 
 use level::Level;
-use tracing::trace;
+use tracing::{info, trace};
 
 fn main() -> color_eyre::Result<()> {
     setup_logging();
@@ -26,7 +26,9 @@ fn main() -> color_eyre::Result<()> {
 pub struct App {
     running: bool,
     pause: bool,
+    must_exit: bool,
     level: Level,
+    status_info: Option<String>,
 }
 
 impl App {
@@ -36,17 +38,26 @@ impl App {
             running: true,
             pause: false,
             level: Level::builtin(),
+            status_info: Default::default(),
+            must_exit: false,
         }
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.running = true;
         while self.running {
+            self.running = !self.must_exit;
             terminal.draw(|frame| self.render(frame))?;
             self.handle_crossterm_events()?;
             if !self.pause {
-                self.level.tick()
+                match self.level.tick() {
+                    world::State::Onging => (),
+                    other => {
+                        self.status_info = Some(format!("{other}"));
+                        self.must_exit = true;
+                        self.pause = true;
+                    }
+                }
             }
         }
         Ok(())
@@ -67,7 +78,13 @@ impl App {
         frame.render_widget(
             Paragraph::new(map).block(Block::bordered().title(title)),
             frame.area(),
-        )
+        );
+        if let Some(status_info) = self.status_info.take() {
+            frame.render_widget(
+                Paragraph::new(status_info).block(Block::bordered()),
+                frame.area(),
+            )
+        }
     }
 
     /// Reads the crossterm events and updates the state of [`App`].

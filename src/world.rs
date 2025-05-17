@@ -6,11 +6,17 @@ pub const START_HEIGHT: u8 = 7;
 pub const EXIT_HEIGHT: u8 = 9;
 
 #[derive(Copy, Clone, Debug)]
+pub enum Destination {
+    Exit(u8),
+    Airport(u8),
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum State {
     Onging,
     PlaneCollision(Plane, Plane),
-    WrongExit(Plane, usize),
-    WrongAirport(Plane, usize),
+    WrongExit(Plane, u8),
+    WrongAirport(Plane, u8),
     PlaneTouchesWall(Plane, DirectionGrid, usize),
     PlaneCrash(Plane),
     PlaneNoFuel(Plane),
@@ -36,7 +42,7 @@ pub enum DirectionGrid {
     Right,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DirectionCardinal {
     North,
     East,
@@ -54,7 +60,7 @@ pub struct World {
     y: usize,
     tiles: Vec<Vec<WorldTile>>,
     planes: HashMap<char, Plane>,
-    exits: HashMap<usize, Exit>,
+    exits: HashMap<u8, Exit>,
     plane_counter: u8,
 }
 
@@ -81,6 +87,7 @@ pub struct Plane {
     kind: PlaneKind,
     id: char,
     ticks: usize,
+    destination: Destination,
 }
 
 impl Plane {
@@ -157,7 +164,7 @@ impl World {
         where_on_wall: DirectionGrid,
         plane_out_direction: DirectionCardinal,
         wall_pos: usize,
-        idx: usize,
+        idx: u8,
     ) -> Result<&mut Self, String> {
         match where_on_wall {
             DirectionGrid::Up | DirectionGrid::Down => {
@@ -301,7 +308,7 @@ impl World {
         out
     }
 
-    pub fn spawn_plane_at_exit(&mut self, exit_id: usize, kind: PlaneKind) -> Result<(), String> {
+    pub fn spawn_plane_at_exit(&mut self, exit_id: u8, kind: PlaneKind) -> Result<(), String> {
         let exit = match self.exits.get(&exit_id) {
             Some(e) => e.clone(),
             None => return Err(format!("No exit for this id: {exit_id}")),
@@ -325,24 +332,46 @@ impl World {
             kind,
             id,
             ticks: Default::default(),
+            destination: Destination::Exit(1),
         };
         self.planes.insert(id, plane);
         Ok(())
     }
 
     fn collision_check(&self) -> Option<(Plane, Plane)> {
-        todo!()
+        None // TODO: add collision
     }
 
     fn wall_collision_check(&self) -> Option<(Plane, DirectionGrid, usize)> {
-        todo!()
+        None // TODO: add collision
     }
 
     /// Removes planes that exit and returns Some if a plane took the wrong exit
     ///
     /// None if everything is ok, some only if a plane took the wrong exit
-    fn planes_take_exits(&mut self) -> Option<(Plane, usize)> {
-        todo!()
+    fn planes_take_exits(&mut self) -> Option<(Plane, u8)> {
+        for (pid, plane) in self.planes.clone() {
+            if plane.pos.y == 0 {
+                for (eid, exit) in self
+                    .exits
+                    .iter()
+                    .filter(|(_id, e)| e.wall_direction == DirectionGrid::Up)
+                {
+                    if exit.wall_pos == plane.pos.x {
+                        // plane takes this exit
+                        if matches!(plane.destination, Destination::Exit(dest_eid) if dest_eid == *eid)
+                        {
+                            // right exit
+                            self.planes.remove(&pid);
+                        } else {
+                            // wrong exit
+                            return Some((plane, *eid));
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Removes planes that exit and returns Some if a plane took the wrong exit
@@ -352,8 +381,43 @@ impl World {
     /// - None: Everything is okay. Maybe a plane landed at the correct airport and was removed
     /// - Some(Plane, None): A plane crashed on the ground (height 0)
     /// - Some(Plane, Some(airport_id)): A plane landed in the wrong airport
-    fn planes_land(&mut self) -> Option<(Plane, Option<usize>)> {
-        todo!()
+    fn planes_land(&mut self) -> Option<(Plane, Option<u8>)> {
+        for (y, row) in self.tiles.iter().enumerate() {
+            for (x, airport) in row
+                .iter()
+                .enumerate()
+                .filter(|(_, tile)| matches!(tile, WorldTile::Airport(_, _)))
+            {
+                for (pid, plane) in self
+                    .planes
+                    .clone()
+                    .iter()
+                    .filter(|(_, plane)| plane.height == 0)
+                {
+                    if plane.pos == [x, y].into() {
+                        // plane lands at this airport
+                        if let Destination::Airport(dest_aid) = plane.destination {
+                            match airport {
+                                WorldTile::Airport(airdir, actual_aid) => {
+                                    if Into::<DirectionCardinal>::into(*airdir) != plane.direction {
+                                        panic!("Plane landed in the wrong direction");
+                                    }
+                                    if dest_aid != *actual_aid {
+                                        // right airport, right direction
+                                        self.planes.remove(pid);
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            panic!("Landed at airport but should have used an exit")
+                        }
+                    }
+                    // TODO: detect crashing plane
+                }
+            }
+        }
+        None
     }
 
     pub fn tick_planes(&mut self) -> State {
@@ -519,6 +583,12 @@ impl TryFrom<(i32, i32)> for Pos {
         } else {
             Err("Negative Positions are not allowed".to_string())
         }
+    }
+}
+
+impl Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}") // TODO: make fancier
     }
 }
 

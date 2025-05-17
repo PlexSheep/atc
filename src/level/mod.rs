@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use rand::random_bool;
-
-use crate::world::World;
+use crate::world::{State, World};
 
 pub mod builtin;
 
@@ -23,7 +21,7 @@ impl Level {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> State {
         if rand::random_bool(0.2) {
             // TODO: add get_max_exit_id function
             self.world
@@ -31,9 +29,7 @@ impl Level {
                 .expect("could not spawn plane");
         }
 
-        match self.world.tick_planes() {
-            _ => todo!(),
-        }
+        self.world.tick_planes()
     }
     pub fn render(&self) -> String {
         self.world.to_string()
