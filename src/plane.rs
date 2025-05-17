@@ -1,4 +1,7 @@
-use crate::world::{DirectionCardinal, PlaneKind, Pos};
+use crate::{
+    error::Error,
+    world::{DirectionCardinal, PlaneKind, Pos},
+};
 
 pub const START_HEIGHT: u8 = 7;
 pub const EXIT_HEIGHT: u8 = 9;
@@ -66,28 +69,37 @@ impl Plane {
                 PlaneKind::Small => 50,
             }
     }
-    fn next_pos(&mut self) {
-        match self.direction.clone() {
-            DirectionCardinal::North => self.pos.y -= 1,
-            DirectionCardinal::NorthEast => {
-                self.pos.y += 1;
-                self.pos.x += 1
-            }
-            DirectionCardinal::NorthWest => {
-                self.pos.y += 1;
-                self.pos.x -= 1
-            }
-            DirectionCardinal::South => self.pos.y += 1,
-            DirectionCardinal::SouthEast => {
-                self.pos.y -= 1;
-                self.pos.x += 1
-            }
-            DirectionCardinal::SouthWest => {
-                self.pos.y -= 1;
-                self.pos.x -= 1
-            }
-            DirectionCardinal::West => self.pos.x += 1,
-            DirectionCardinal::East => self.pos.x -= 1,
+    fn next_pos(&mut self) -> Result<(), Error> {
+        fn do_stuff(p: &mut Plane) -> Option<()> {
+            match p.direction {
+                DirectionCardinal::North => p.pos.y = p.pos.y.checked_sub(1)?,
+                DirectionCardinal::NorthEast => {
+                    p.pos.y = p.pos.y.checked_sub(1)?;
+                    p.pos.x = p.pos.x.checked_add(1)?;
+                }
+                DirectionCardinal::NorthWest => {
+                    p.pos.y = p.pos.y.checked_sub(1)?;
+                    p.pos.x = p.pos.x.checked_sub(1)?;
+                }
+                DirectionCardinal::South => p.pos.y = p.pos.y.checked_add(1)?,
+                DirectionCardinal::SouthEast => {
+                    p.pos.y = p.pos.y.checked_add(1)?;
+                    p.pos.x = p.pos.x.checked_add(1)?;
+                }
+                DirectionCardinal::SouthWest => {
+                    p.pos.y = p.pos.y.checked_add(1)?;
+                    p.pos.x = p.pos.x.checked_sub(1)?;
+                }
+                DirectionCardinal::West => p.pos.x = p.pos.x.checked_sub(1)?,
+                DirectionCardinal::East => p.pos.x = p.pos.x.checked_add(1)?,
+            };
+
+            Some(())
+        }
+        if do_stuff(self).is_none() {
+            Err(Error::PlaneNextPosBad(self.id))
+        } else {
+            Ok(())
         }
     }
 

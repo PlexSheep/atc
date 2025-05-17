@@ -8,6 +8,7 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 
+mod error;
 mod level;
 mod plane;
 mod world;

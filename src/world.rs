@@ -2,7 +2,10 @@ use std::{collections::HashMap, fmt::Display};
 
 use tracing::trace;
 
-use crate::plane::{Destination, Plane};
+use crate::{
+    error::Error,
+    plane::{Destination, Plane},
+};
 
 #[derive(Copy, Clone, Debug)]
 pub enum State {
@@ -90,22 +93,16 @@ impl World {
         plane_out_direction: DirectionCardinal,
         wall_pos: usize,
         idx: u8,
-    ) -> Result<&mut Self, String> {
+    ) -> Result<&mut Self, Error> {
         match where_on_wall {
             DirectionGrid::Up | DirectionGrid::Down => {
                 if !wall_pos < self.y {
-                    return Err(format!(
-                        "exit pos is out of bounds: {} < {}",
-                        wall_pos, self.y
-                    ));
+                    return Err(Error::ExitPosOutOfBounds(wall_pos, self.y));
                 }
             }
             DirectionGrid::Left | DirectionGrid::Right => {
                 if !wall_pos < self.x {
-                    return Err(format!(
-                        "exit pos is out of bounds: {} < {}",
-                        wall_pos, self.x
-                    ));
+                    return Err(Error::ExitPosOutOfBounds(wall_pos, self.x));
                 }
             }
         }
@@ -121,25 +118,21 @@ impl World {
         Ok(self)
     }
 
-    pub fn place_tile(
-        &mut self,
-        tile: WorldTile,
-        pos: impl Into<Pos>,
-    ) -> Result<&mut Self, String> {
+    pub fn place_tile(&mut self, tile: WorldTile, pos: impl Into<Pos>) -> Result<&mut Self, Error> {
         let pos: Pos = pos.into();
         self.check_pos_bounds(pos)?;
         self.tiles[pos.y][pos.x] = tile;
         Ok(self)
     }
 
-    fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), String> {
+    fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), Error> {
         let pos = pos.into();
         trace!("check if pos in bounds: {pos:?}");
         if pos.x + 1 > self.x {
-            return Err(format!("x is out of bounds: {} < {}", pos.x, self.x));
+            return Err(Error::PosOutOfBounds(pos.x, self.x));
         }
         if pos.y + 1 > self.y {
-            return Err(format!("y is out of bounds: {} < {}", pos.y, self.y));
+            return Err(Error::PosOutOfBounds(pos.y, self.y));
         }
         trace!("pos in is bounds: {pos:?}");
         Ok(())
@@ -150,7 +143,7 @@ impl World {
         &mut self,
         a: impl Into<Pos>,
         b: impl Into<Pos>,
-    ) -> Result<&mut Self, String> {
+    ) -> Result<&mut Self, Error> {
         let a: Pos = a.into();
         let b: Pos = b.into();
 
@@ -233,10 +226,10 @@ impl World {
         out
     }
 
-    pub fn spawn_plane_at_exit(&mut self, exit_id: u8, kind: PlaneKind) -> Result<(), String> {
+    pub fn spawn_plane_at_exit(&mut self, exit_id: u8, kind: PlaneKind) -> Result<(), Error> {
         let exit = match self.exits.get(&exit_id) {
             Some(e) => *e,
-            None => return Err(format!("No exit for this id: {exit_id}")),
+            None => return Err(Error::NoExitForID(exit_id)),
         };
         let pos = match exit.plane_out_direction {
             DirectionCardinal::North => [exit.wall_pos, 0].into(),
@@ -498,7 +491,7 @@ impl From<DirectionGrid> for DirectionCardinal {
 }
 
 impl TryFrom<(i32, i32)> for Pos {
-    type Error = String;
+    type Error = Error;
 
     fn try_from(value: (i32, i32)) -> Result<Self, Self::Error> {
         if value.0 >= 0 && value.1 >= 0 {
@@ -507,7 +500,7 @@ impl TryFrom<(i32, i32)> for Pos {
                 y: value.1 as usize,
             })
         } else {
-            Err("Negative Positions are not allowed".to_string())
+            Err(Error::PosFromSigned(value))
         }
     }
 }

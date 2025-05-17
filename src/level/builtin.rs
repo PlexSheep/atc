@@ -1,4 +1,7 @@
-use crate::world::{DirectionCardinal, DirectionGrid, World};
+use crate::{
+    error::Error,
+    world::{DirectionCardinal, DirectionGrid, World},
+};
 
 use super::Level;
 
@@ -9,7 +12,7 @@ impl Level {
     pub fn builtin() -> Self {
         let mut world = World::new(X, Y);
 
-        fn place_stuff(world: &mut World) -> Result<(), String> {
+        fn place_stuff(world: &mut World) -> Result<(), Error> {
             world.place_route_in_line([19, 10], [0, 10])?;
             world.place_route_in_line([5, 0], [5, 19])?;
             world.place_route_in_line([12, 0], [12, 19])?;
