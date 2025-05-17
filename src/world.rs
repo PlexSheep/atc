@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::{
     error::Error,
@@ -127,14 +127,12 @@ impl World {
 
     fn check_pos_bounds(&self, pos: impl Into<Pos>) -> Result<(), Error> {
         let pos = pos.into();
-        trace!("check if pos in bounds: {pos:?}");
         if pos.x + 1 > self.x {
             return Err(Error::PosOutOfBounds(pos.x, self.x));
         }
         if pos.y + 1 > self.y {
             return Err(Error::PosOutOfBounds(pos.y, self.y));
         }
-        trace!("pos in is bounds: {pos:?}");
         Ok(())
     }
 
@@ -147,8 +145,6 @@ impl World {
         let a: Pos = a.into();
         let b: Pos = b.into();
 
-        trace!("pos a: {a:?}");
-        trace!("pos b: {a:?}");
         self.check_pos_bounds(a)?;
         self.check_pos_bounds(b)?;
 
@@ -262,31 +258,66 @@ impl World {
         None // TODO: add collision
     }
 
+    fn plane_exit_check_inner(
+        &mut self,
+        plane: &Plane,
+        wall_dir: DirectionGrid,
+        plane_pos: usize,
+    ) -> Option<(Plane, u8)> {
+        for (eid, exit) in self
+            .exits
+            .iter()
+            .filter(|(_id, e)| e.wall_direction == wall_dir)
+        {
+            if exit.wall_pos == plane_pos {
+                // plane takes this exit
+                if matches!(plane.destination, Destination::Exit(dest_eid) if dest_eid == *eid) {
+                    // right exit
+                    self.planes.remove(&plane.id);
+                } else {
+                    // wrong exit
+                    return Some((*plane, *eid));
+                }
+            }
+        }
+        None
+    }
+
     /// Removes planes that exit and returns Some if a plane took the wrong exit
     ///
     /// None if everything is ok, some only if a plane took the wrong exit
     fn planes_take_exits(&mut self) -> Option<(Plane, u8)> {
+        // TODO: add height check
         for (pid, plane) in self.planes.clone() {
             if plane.just_spawned {
+                debug!("Plane {pid} is too new, skipping for exit check");
                 continue;
             }
             if plane.pos.y == 0 {
-                for (eid, exit) in self
-                    .exits
-                    .iter()
-                    .filter(|(_id, e)| e.wall_direction == DirectionGrid::Up)
+                if let Some(v) = self.plane_exit_check_inner(&plane, DirectionGrid::Up, plane.pos.x)
                 {
-                    if exit.wall_pos == plane.pos.x {
-                        // plane takes this exit
-                        if matches!(plane.destination, Destination::Exit(dest_eid) if dest_eid == *eid)
-                        {
-                            // right exit
-                            self.planes.remove(&pid);
-                        } else {
-                            // wrong exit
-                            return Some((plane, *eid));
-                        }
-                    }
+                    return Some(v);
+                }
+            }
+            if plane.pos.y == self.y {
+                if let Some(v) =
+                    self.plane_exit_check_inner(&plane, DirectionGrid::Down, plane.pos.x)
+                {
+                    return Some(v);
+                }
+            }
+            if plane.pos.x == 0 {
+                if let Some(v) =
+                    self.plane_exit_check_inner(&plane, DirectionGrid::Left, plane.pos.y)
+                {
+                    return Some(v);
+                }
+            }
+            if plane.pos.x == self.x {
+                if let Some(v) =
+                    self.plane_exit_check_inner(&plane, DirectionGrid::Right, plane.pos.y)
+                {
+                    return Some(v);
                 }
             }
         }
