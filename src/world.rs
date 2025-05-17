@@ -516,7 +516,24 @@ impl TryFrom<(i32, i32)> for Pos {
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}") // TODO: make fancier
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Onging => unreachable!(),
+                Self::WrongExit(plane, eid) =>
+                    format!("Plane {} exited at the wrong exit: {eid}", plane.id),
+                Self::PlaneCrash(plane) =>
+                    format!("Plane {} crashed on the ground (height 0)", plane.id),
+                Self::PlaneNoFuel(plane) => format!("Plane {} is out of fuel", plane.id),
+                Self::WrongAirport(plane, aid) =>
+                    format!("Plane {} landed at the wrong airport: {aid}", plane.id),
+                Self::PlaneCollision(pa, pb) =>
+                    format!("Plane {} collided with Plane {}", pa.id, pb.id),
+                Self::PlaneTouchesWall(plane, _, _) =>
+                    format!("Plane {} did not leave through an exit", plane.id),
+            }
+        )
     }
 }
 
