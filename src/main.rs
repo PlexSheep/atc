@@ -1,6 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
+    prelude::{Constraint, Layout, Margin},
     style::Stylize,
     text::Line,
     widgets::{Block, Paragraph},
@@ -70,6 +71,13 @@ impl App {
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
     fn render(&mut self, frame: &mut Frame) {
+        let whole_area = frame.area().inner(Margin::default());
+        let chunks =
+            Layout::vertical([Constraint::Length(frame.area().height), Constraint::Min(3)])
+                .split(whole_area);
+        let map_area = chunks[0];
+        let status_area = chunks[1];
+
         let title = Line::from("Air Traffic Controller")
             .bold()
             .blue()
@@ -77,12 +85,12 @@ impl App {
         let map: String = self.level.render();
         frame.render_widget(
             Paragraph::new(map).block(Block::bordered().title(title)),
-            frame.area(),
+            map_area,
         );
         if let Some(status_info) = self.status_info.take() {
             frame.render_widget(
                 Paragraph::new(status_info).block(Block::bordered()),
-                frame.area(),
+                status_area,
             )
         }
     }
