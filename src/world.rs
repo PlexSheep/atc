@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     error::Error,
@@ -371,7 +371,7 @@ impl World {
     }
 
     pub fn tick_planes(&mut self) -> State {
-        for (_plane_id, plane) in &mut self.planes {
+        for plane in self.planes.values_mut() {
             if let Err(()) = plane.tick() {
                 return State::PlaneNoFuel(*plane);
             }

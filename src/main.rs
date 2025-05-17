@@ -14,7 +14,7 @@ mod plane;
 mod world;
 
 use level::Level;
-use tracing::{info, trace};
+use tracing::trace;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AppFlags {
